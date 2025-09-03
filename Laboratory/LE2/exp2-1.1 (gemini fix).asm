@@ -5,6 +5,8 @@
 
 ORG 100h  ; Directive for a .COM file. Program starts at memory offset 100h.
 
+jmp START:
+
 ; --- DATA DEFINITIONS ---
 DATA1 DB 25H 
 DATA2 DW 1234H  
