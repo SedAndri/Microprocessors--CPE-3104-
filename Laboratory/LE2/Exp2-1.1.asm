@@ -34,10 +34,6 @@ MOV AX, [BX]            ; COPIES THE WORD CONTENT OF DATA SEGMENT MEMORY LOCATIO
 MOV DI, 02H             ; ADDRESS ELEMENT 
 MOV AX, [BX+DI]         ; COPIES THE WORD CONTENT OF DATA SEGMENT MEMORY LOCATION 
 
-; The following lines from the original code are omitted for clarity as they are either
-; redundant (MOV AX, [BX+0002H]) or potentially unsafe (MOV AX, [BX+DI+0002H]).
-
-; --- PROGRAM TERMINATION ---
 MOV AH, 4CH         ; CORRECTED: Standard DOS function to exit a program.
 INT 21H             ; Call the DOS interrupt.
 
