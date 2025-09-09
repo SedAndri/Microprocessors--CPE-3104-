@@ -6,17 +6,12 @@
 
 
 .data
-    ; Prompt to display to user
-    prompt db 'Input a string: $'
-    ; Newline characters for output
-    newline db 13, 10, '$'
+    ; Hard-coded string to rotate
+    buffer db 'HELLO$'      ; The string we want to rotate ($ is just marker, not part of string)
     
-    ; Buffer for DOS function 0Ah input:
-    buffer db 100          ; Max input size (user can type up to 100 chars)
-        db ?            ; Actual size entered (filled by DOS after input)
-        db 100 dup(?)   ; Actual characters entered
-
-    input_length dw 0      ; Stores length of input string (used for rotation/display)
+    input_length dw 5       ; Length of the hard-coded string "HELLO"
+    current_row db 0        ; Current row position on screen
+    current_col db 0        ; Current column position on screen
 
 
 .code
@@ -24,44 +19,21 @@ main proc
     ; Set up data segment registers
     mov ax, @data          ; Load address of data segment
     mov ds, ax             ; Set DS to data segment
-    mov es, ax             ; Set ES to data segment (not strictly needed here)
+    
+    ; Set up video segment (B800h for color text mode)
+    mov ax, 0B800h         ; Video memory segment
+    mov es, ax             ; ES points to video memory
 
-    ; Show prompt to user
-    mov ah, 09h            ; DOS print string function
-    lea dx, prompt         ; DX points to prompt string
-    int 21h                ; Call DOS interrupt
-
-    ; Read string from user
-    mov ah, 0Ah            ; DOS buffered input function
-    lea dx, buffer         ; DX points to buffer
-    int 21h                ; Call DOS interrupt
-
-    ; Get length of input
-    mov al, [buffer+1]     ; AL = actual number of chars read
-    mov ah, 0              ; Clear AH for 16-bit value
-    mov input_length, ax   ; Store length in input_length
-
-    ; Remove ENTER (0Dh) if present at end
-    mov si, offset buffer+2 ; SI points to first char of input
-    add si, ax              ; Move SI to last char entered
-    dec si                  ; Adjust SI to last char
-    cmp byte ptr [si], 0Dh  ; Is last char ENTER?
-
-    jne skip_trim           ; If not ENTER, skip trimming
-    dec input_length        ; If ENTER, reduce length by 1
-skip_trim:
-
-
-    ; Print newline after input
-    call new_line
+    ; Clear screen first
+    call clear_screen
 
     ; Show original string
     call display_string     ; Print input string
     call new_line           ; Print newline
 
-    ; Rotate and display (length-1) times
+    ; Rotate and display until back to original (length times)
     mov cx, input_length    ; CX = number of chars
-    dec cx                  ; We rotate (length-1) times
+    ; Note: We rotate exactly 'length' times to return to original
 
 rotate_loop:
     call rotate_left        ; Rotate string left by 1
@@ -69,7 +41,7 @@ rotate_loop:
     call new_line           ; Print newline
     loop rotate_loop        ; Repeat until CX = 0
 
-    ; Exit program
+    ; Exit program (still need DOS interrupt for program termination)
     mov ah, 4Ch             ; DOS terminate program
     int 21h
 main endp
@@ -78,7 +50,7 @@ main endp
 ; Rotates the string left by 1 character
 rotate_left proc
     pusha                     ; Save all registers
-    mov si, offset buffer+2   ; SI points to first char
+    mov si, offset buffer     ; SI points to first char of hard-coded string
     mov al, [si]              ; Save first char in AL
     mov cx, input_length      ; CX = length
     dec cx                    ; We need to shift (length-1) chars
@@ -95,31 +67,65 @@ shift_loop:
 rotate_left endp
 
 
-; Displays the string character by character
+; Displays the string character by character using video buffer
 display_string proc
     pusha                     ; Save all registers
     mov cx, input_length      ; CX = length
-    mov si, offset buffer+2   ; SI points to first char
+    mov si, offset buffer     ; SI points to first char of hard-coded string
+    
+    ; Calculate video memory position: (row * 80 + col) * 2
+    mov al, current_row       ; AL = current row
+    mov bl, 80                ; 80 characters per row
+    mul bl                    ; AX = row * 80
+    mov bl, current_col       ; BL = current column
+    mov bh, 0                 ; Clear BH
+    add ax, bx                ; AX = row * 80 + col
+    shl ax, 1                 ; Multiply by 2 (each char takes 2 bytes: char + attribute)
+    mov di, ax                ; DI = offset in video memory
+
 print_loop:
-    mov dl, [si]              ; DL = current char
-    mov ah, 02h               ; DOS print char function
-    int 21h                   ; Print char
-    inc si                    ; Next char
+    mov al, [si]              ; AL = current char
+    mov ah, 07h               ; AH = attribute (white on black)
+    mov es:[di], ax           ; Write char and attribute to video memory
+    add di, 2                 ; Move to next character position (skip attribute byte)
+    inc current_col           ; Increment column
+    inc si                    ; Next char in string
     loop print_loop           ; Repeat for all chars
+    
     popa                      ; Restore registers
     ret
 display_string endp
 
 
-; Prints a newline using DOS function
+; Moves to next line by updating current_row and resetting current_col
 new_line proc
     pusha                     ; Save all registers
-    mov ah, 09h               ; DOS print string function
-    lea dx, newline           ; DX points to newline string
-    int 21h                   ; Print newline
+    inc current_row           ; Move to next row
+    mov current_col, 0        ; Reset column to beginning
     popa                      ; Restore registers
     ret
 new_line endp
+
+
+; Clears the screen by filling video memory with spaces
+clear_screen proc
+    pusha                     ; Save all registers
+    mov di, 0                 ; Start at beginning of video memory
+    mov cx, 2000              ; 80 columns * 25 rows = 2000 characters
+    mov ax, 0720h             ; Space character (20h) with white on black attribute (07h)
+    
+clear_loop:
+    mov es:[di], ax           ; Write space and attribute
+    add di, 2                 ; Move to next position
+    loop clear_loop           ; Repeat for entire screen
+    
+    ; Reset cursor position
+    mov current_row, 0
+    mov current_col, 0
+    
+    popa                      ; Restore registers
+    ret
+clear_screen endp
 
 
 ; End of program
