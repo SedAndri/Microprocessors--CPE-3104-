@@ -1,3 +1,5 @@
+; Bordario, Sid Andre P.
+
 org 100h
 
 .code
@@ -18,7 +20,7 @@ org 100h
 
     call print_msg        
 
-    add di, 130 ;spacing           
+    add di, 130 ;spacing          
 
     cmp ah, 0
     je show_even
