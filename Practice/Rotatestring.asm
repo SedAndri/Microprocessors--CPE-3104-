@@ -1,5 +1,6 @@
      ; Bordario, Sid Andre P.
-
+     
+     ;study and improve
 org 100h  
 
    

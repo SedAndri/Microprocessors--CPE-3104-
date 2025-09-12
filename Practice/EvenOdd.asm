@@ -1,3 +1,5 @@
+; Bordario, Sid Andre P.
+
 org 100h
 
 .code
@@ -6,25 +8,23 @@ org 100h
 
     mov di, 0             
 
-    mov al, 7             ; Hard-coded number
+    mov al, [VALUE]       
     mov ah, 0             
     mov bl, 2             
     div bl                
 
-    
     mov si, offset num_msg
-    mov al, 7             ; The coded number
+    mov al, [VALUE]       
     add al, 30h           
     mov [si+14], al       
 
     call print_msg        
 
-    add di, 160           
+    add di, 130 ;spacing          
 
     cmp ah, 0
     je show_even
 
-    
     mov si, offset odd_msg
     call print_msg
     jmp end_label
@@ -50,7 +50,9 @@ print_msg:
     jmp .next_char
 .done:
     ret
-
+;==============================================================
+VALUE db 9  
+;==============================================================                    
 num_msg db "The number is X$"
 even_msg db "The value is an even number!$"
 odd_msg  db "The value is an odd number!$"

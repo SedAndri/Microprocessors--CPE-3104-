@@ -37,6 +37,7 @@ mov di, ax              ;di now contains the offset in video memory where the me
 
 mov si, offset msg      ;reload the starting address of msg into si (para sure)
 
+;=====PRINTING THE STRING=====
                         ;printing the string
 next_char:
     mov al, [si]        ; loads a character from msg into al
