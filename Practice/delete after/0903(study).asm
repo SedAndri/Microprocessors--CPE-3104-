@@ -12,7 +12,7 @@ DISPLAY_LOOP:
         CALL DELAY
         CALL CLEAR_NAME
                  
-        ADD SI, 156
+        ADD SI, 160
         MOV DI, SI
         DEC BL
         CMP BL, 0
@@ -21,25 +21,25 @@ DISPLAY_LOOP:
 RET
 
 DISPLAY_NAME:   
-        MOV AH, 0B1H
-        MOV AL, 43H
+        MOV AH, 1AH
+        MOV AL, 53H
         MOV [DI], AX
                         
         ADD DI, 2
-        MOV AL, 59H
+        MOV AL, 49H
         MOV [DI], AX 
                         
         ADD DI, 2
-        MOV AL, 52H
+        MOV AL, 44H
         MOV [DI], AX 
                 
-        ADD DI, 2
-        MOV AL, 49H
-        MOV [DI], AX 
-                
-        ADD DI, 2
-        MOV AL, 4CH
-        MOV [DI], AX 
+        ;ADD DI, 2
+;        MOV AL, 49H
+;        MOV [DI], AX 
+;                
+;        ADD DI, 2
+;        MOV AL, 4CH
+;        MOV [DI], AX 
 
 RET
 
@@ -50,7 +50,7 @@ LOOP HERE
 RET
 
 CLEAR_NAME: 
-MOV CX, 5
+MOV CX, 3
 DELETE: 
 MOV AX, 0
 MOV [SI], AX
