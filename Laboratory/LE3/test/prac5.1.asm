@@ -5,7 +5,7 @@ jmp start
 ; ----------------------------
 ; Config/Constants
 ; ----------------------------
-ATTR        db 1Ah              ;color
+ATTR        db 1Ah              ; bright yellow on black
 CENTER_COL  equ 40              ; center column (0..79)
 COLS        equ 80
 ROWS        equ 25
@@ -14,8 +14,8 @@ MAXLEN      equ 31              ; max allowed input length
 ; ----------------------------
 ; Prompts
 ; ----------------------------
-PROMPT      db 'Enter odd text',0
-ERRMSG      db 'Length must be ODD and between 1 and 31. Try again.',0
+PROMPT      db 'Enter text (1..31), then Enter:',0
+ERRMSG      db 'Length must be between 1 and 31. Try again.',0
 
 ; ----------------------------
 ; DOS 0Ah input buffer (max, len, data...)
@@ -30,6 +30,8 @@ InBufData   db MAXLEN dup(0)
 STR         db MAXLEN dup(0)
 LEN         db 0
 MID         db 0
+LEFTLEN     db 0
+RIGHTLEN    db 0
 
 ; ----------------------------
 ; Animation state
@@ -81,8 +83,6 @@ input_loop:
     mov al, [InBufLen]
     cmp al, 0
     je  bad_input
-    test al, 1
-    jz  bad_input
 
     ; copy to STR safely (ES=DS), and ensure CX uses 8-bit length
     mov [LEN], al
@@ -100,20 +100,36 @@ input_loop:
     mov bl, [LEN]
     mov byte [STR+bx], 0
 
-    ; compute MID = LEN/2
+    ; compute MID = floor(LEN/2)
     mov al, [LEN]
     mov ah, 0
     shr al, 1
     mov [MID], al
+
+    ; compute LEFTLEN/RIGHTLEN with left priority when odd
+    ; RIGHTLEN = MID; LEFTLEN = MID (+1 if LEN is odd)
+    mov al, [MID]
+    mov [RIGHTLEN], al
+    mov al, [LEN]
+    test al, 1
+    jz  @even_len
+    mov al, [MID]
+    inc al
+    mov [LEFTLEN], al
+    jmp @lens_done
+@even_len:
+    mov al, [MID]
+    mov [LEFTLEN], al
+@lens_done:
 
     ; STARTCOL = CENTER_COL - MID
     mov al, CENTER_COL
     sub al, [MID]
     mov [STARTCOL], al
 
-    ; RTARGET = 80 - MID   (right part start col so last char ends at col 79)
+    ; RTARGET = 80 - RIGHTLEN   (right part start col so last char ends at col 79)
     mov al, COLS
-    sub al, [MID]
+    sub al, [RIGHTLEN]
     mov [RTARGET], al
 
     ; replace slow per-line erase with instant full-screen clear
@@ -163,11 +179,16 @@ at_bottom:
     ; initialize left/right start columns
     mov al, [STARTCOL]
     mov [LCOL], al
+    ; RCOL starts at CENTER_COL (+1 if LEN is odd)
     mov al, CENTER_COL
+    mov bl, [LEN]
+    test bl, 1
+    jz  @rc_even
     inc al
+@rc_even:
     mov [RCOL], al
 
-    ; draw initial L/M/R at row 24
+    ; draw initial split at row 24
     mov al, 24
     call DRAW_SPLIT_AT_ROW
 
@@ -196,7 +217,7 @@ after_out_step:
     jb  move_outward
 
     ; ----------------------------
-    ; Stage 3: move all three up to top row
+    ; Stage 3: move both parts up to top row
     ; ----------------------------
     mov [CURROW], 24
 
@@ -214,7 +235,7 @@ move_up_three:
 at_top_three:
     ; ----------------------------
     ; Stage 4: merge at top by moving left->right and right->left
-    ; target LCOL = STARTCOL, RCOL = CENTER_COL+1
+    ; target LCOL = STARTCOL, RCOL = CENTER_COL (+1 if LEN is odd)
     ; ----------------------------
 merge_horiz:
     ; move left part right if needed
@@ -226,7 +247,11 @@ skip_left_merge:
     ; move right part left if needed
     mov al, [RCOL]
     mov bl, CENTER_COL
+    mov bh, [LEN]
+    test bh, 1
+    jz  @mrg_r_even
     inc bl
+@mrg_r_even:
     cmp al, bl
     jbe after_merge_step
     dec [RCOL]
@@ -235,13 +260,17 @@ after_merge_step:
     call CLEAR_SCREEN
     mov al, 0
     call DRAW_SPLIT_AT_ROW
-    ; loop until LCOL==STARTCOL and RCOL==CENTER_COL+1
+    ; loop until LCOL==STARTCOL and RCOL==CENTER_COL(+1 if odd)
     mov al, [LCOL]
     cmp al, [STARTCOL]
     jne merge_horiz
     mov al, [RCOL]
     mov bl, CENTER_COL
+    mov bh, [LEN]
+    test bh, 1
+    jz  @mrg_chk_even
     inc bl
+@mrg_chk_even:
     cmp al, bl
     jne merge_horiz
 
@@ -331,24 +360,6 @@ ds_done:
     pop ax
     ret
 
-; DRAW_MID: draw STR[MID] at row AL, center col
-DRAW_MID:
-    push ax
-    push bx
-    push dx
-    mov dl, CENTER_COL
-    call SETDI
-    xor bh, bh
-    mov bl, [MID]
-    mov al, [STR+bx]
-    mov es:[di], al
-    mov al, [ATTR]
-    mov es:[di+1], al
-    pop dx
-    pop bx
-    pop ax
-    ret
-
 ; DRAW_FULL_AT_ROW: draw whole STR (LEN) centered at row AL
 ; Uses: STARTCOL, STR, LEN
 DRAW_FULL_AT_ROW:
@@ -366,8 +377,8 @@ DRAW_FULL_AT_ROW:
     pop bx
     ret
 
-; DRAW_SPLIT_AT_ROW: draw left/MID/right pieces at row AL
-; Uses: LCOL, RCOL, STR, MID
+; DRAW_SPLIT_AT_ROW: draw left/right pieces at row AL
+; Uses: LCOL, RCOL, STR, LEFTLEN, RIGHTLEN
 DRAW_SPLIT_AT_ROW:
     push bx
     push cx
@@ -376,18 +387,15 @@ DRAW_SPLIT_AT_ROW:
     ; left part
     mov dl, [LCOL]
     lea si, STR
-    mov cl, [MID]
+    mov cl, [LEFTLEN]
     call DRAW_SEG
-    ; middle char
-    call DRAW_MID
     ; right part
     mov dl, [RCOL]
     lea si, STR
+    mov bl, [LEFTLEN]
     xor bh, bh
-    mov bl, [MID]
-    inc bl
     add si, bx
-    mov cl, [MID]
+    mov cl, [RIGHTLEN]
     call DRAW_SEG
     pop si
     pop dx

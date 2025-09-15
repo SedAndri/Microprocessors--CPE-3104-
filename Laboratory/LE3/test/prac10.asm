@@ -159,11 +159,11 @@ start:
 	int     21h
 
 MSG       DB "Enter three (3) digit: $"
-HUNDREDS  DB 0Dh, 0Ah, "P100   $"   
-FIFTY     DB 0Dh, 0Ah, "P50    $"
-TWENTY    DB 0Dh, 0Ah, "P20   $"
-TENS      DB 0Dh, 0Ah, "P10   $"
-FIVE      DB 0Dh, 0Ah, "P5    $"
-ONE       DB 0Dh, 0Ah, "P1    $"
+HUNDREDS  DB 0Dh, 0Ah, "100   $"   
+FIFTY     DB 0Dh, 0Ah, "50    $"
+TWENTY    DB 0Dh, 0Ah, "20   $"
+TENS      DB 0Dh, 0Ah, "10   $"
+FIVE      DB 0Dh, 0Ah, "5    $"
+ONE       DB 0Dh, 0Ah, "1    $"
 DIGIT     DB 4,?,4 DUP (' ')
 DENO      DB 10,?,10 DUP (' ')
