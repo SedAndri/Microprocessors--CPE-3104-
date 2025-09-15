@@ -2,7 +2,7 @@ org 100h
 
 DELAY_OUTER EQU 0001h
 DELAY_INNER EQU 0006h
-                       ;diamond
+                       ;diamondy
     ; Initialize stack explicitly for Emu8086
     mov ax, cs
     mov ss, ax
