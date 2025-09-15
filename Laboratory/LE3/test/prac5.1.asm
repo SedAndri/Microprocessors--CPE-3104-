@@ -1,7 +1,7 @@
 org 100h
 
 jmp start
-
+;angsarapmopia copy
 ; ----------------------------
 ; Config/Constants
 ; ----------------------------
