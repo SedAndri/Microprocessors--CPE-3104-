@@ -1,10 +1,4 @@
-; EMU8086 / DOS .COM style program
-; EQUATION: X = A - B x C / D
-; - Inputs: A, B, C, D as two decimal digits (00-99)
-; - Displays inputted values
-; - Shows equation with values
-; - Evaluates X
-; - Shows X in base 10 and base 5
+
 
 org 100h
 
@@ -30,10 +24,9 @@ sp_div      db ' / $'
 base10suf   db '10$'
 base5suf    db '5$'
 
-; input buffer for DOS function 0Ah (line input)
-; structure: [max][len][data...]
-inbuf       db 2      ; maximum 2 chars
-			db 0      ; actual length (filled by DOS)
+
+inbuf       db 2      
+			db 0      
 			db 2 dup(?)
 
 A_val       dw 0
@@ -43,16 +36,12 @@ D_val       dw 0
 TEMP_val    dw 0
 X_val       dw 0
 
-digitsBuf   db 6 dup(?)  ; for printing up to 5 digits plus safety
+digitsBuf   db 6 dup(?) 
 
-; ----------------------
-; Code
-; ----------------------
+
 
 start:
-	; DS = CS for COM program by default; safe to proceed
-
-	; Read inputs A, B, C, D (2 digits each)
+	
 	lea dx, promptA
 	mov ah, 09h
 	int 21h
@@ -403,7 +392,6 @@ Pub5_done:
 	ret
 PrintUnsignedBase5 endp
 
-; PrintSignedBase5: prints AX as signed base-5 number (prefix '-' if negative)
 PrintSignedBase5 proc near
 	push ax
 	cmp ax, 0
@@ -417,5 +405,3 @@ Psb5_pos:
 	pop ax
 	ret
 PrintSignedBase5 endp
-
-; End of file

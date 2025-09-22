@@ -8,8 +8,8 @@ promptB   db 'Input B: $'
 promptC   db 'Input C: $'
 promptD   db 'Input D: $'
 
-sep10     db 13,10,'==========',13,10,'$'
-sep11     db '===========',13,10,'$'
+sep10     db 13,10,'',13,10,'$'
+sep11     db '',13,10,'$'
 
 lineA     db 'A = $'
 lineB     db 'B = $'
@@ -41,7 +41,7 @@ C_val dw ?
 D_val dw ?
 X_val dw ?
 
-; --- helpers ---
+-
 print_str:             ; DX -> $-terminated string
     mov ah, 09h
     int 21h
@@ -59,7 +59,7 @@ print_crlf:
     call print_char
     ret
 
-print_two:             ; DI -> two ASCII digits
+print_two:            
     push ax
     push dx
     mov dl, [di]
@@ -296,15 +296,14 @@ calc:
     mov dx, offset sep11
     call print_str
 
-    ; Compute X = A - (B*C)/D  (16-bit math)
+  
     mov ax, B_val
     mov cx, C_val
-    mul cx              ; DX:AX = B*C (fits in 16-bit, but we'll still zero DX before DIV)
-    xor dx, dx
+    mul cx              
     mov bx, D_val
-    div bx              ; AX = (B*C)/D (integer)
+    div bx             
     mov bx, A_val
-    sub bx, ax          ; BX = X
+    sub bx, ax          
     mov ax, bx
     mov X_val, ax
 
