@@ -1,0 +1,38 @@
+DATA SEGMENT
+PORTA EQU 0F0H ; address to access port F0H
+PORTB EQU 0F2H ; address to access port F2H
+PORTC EQU 0F4H ; address to access port F4H
+DATA ENDS
+
+CODE    SEGMENT PUBLIC 'CODE'
+        ASSUME CS:CODE
+
+START:
+; display ‘9’ in 7-segment display
+MOV DX, PORTB ; set port to F2H
+MOV AL, 01101111B ; signal to display ‘9’
+OUT DX, AL 
+
+MAIN_LOOP:
+        
+        MOV     DX, 0F4H
+        IN      AL, DX
+
+        
+        TEST    AL, 01H
+        JZ      SW_OFF
+
+SW_ON:
+        MOV     DX, 0F0H
+        MOV     AL, 01H
+        OUT     DX, AL
+        JMP     MAIN_LOOP
+
+SW_OFF:
+        MOV     DX, 0F0H
+        XOR     AL, AL        ;
+        OUT     DX, AL
+        JMP     MAIN_LOOP
+
+CODE    ENDS
+        END START
