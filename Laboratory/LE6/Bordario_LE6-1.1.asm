@@ -30,7 +30,7 @@ DATA SEGMENT
     STR_WARN3      DB '0 to disarm',0
 
     STR_SET1       DB 'Input AccessCode',0
-    STR_SET2       DB '[        ]  #=set',0z
+    STR_SET2       DB '[        ]  #=set',0
 
     STR_BADLEN1    DB 'Invalid length',0
     STR_BADLEN2    DB 'Use 4..8 digits',0
