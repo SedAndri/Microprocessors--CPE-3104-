@@ -19,7 +19,7 @@ DATA SEGMENT
     OPERAND1 DB 0           ; Defines a byte-sized variable named OPERAND1 and initializes it to 0.
     OPERAND2 DB 0           ; Defines a byte-sized variable named OPERAND2 and initializes it to 0.
 DATA ENDS
- 
+
 CODE SEGMENT PARA 'CODE'    ; Declares the beginning of the code segment.
 ASSUME CS:CODE, DS:DATA     ; Tells the assembler that CS points to CODE segment and DS points to DATA segment.
 ORG 0000H                   ; Sets the starting address of the code to 0000H.
