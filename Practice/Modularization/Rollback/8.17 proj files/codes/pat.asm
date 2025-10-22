@@ -58,14 +58,6 @@ START:
       JMP WAIT_INPUT
       
    _CYCLONE:
-      ; 1 2 3 4
-      ; 5 6 7 8
-      ; CCW = 1 2 5 6
-      ; CC	  = 4 3 7 8
-     
-      ; 1ST		2ND	3RD	4TH		LOOP
-      ; 1 0 0 1	0 1 1 0	0 0 0 0	0 0 0 0	
-      ; 0 0 0 0	0 0 0 0	0 1 1 0	1 0 0 1
       MOV DX, PORTA
       MOV AL, 00001001B
       OUT DX, AL
@@ -118,10 +110,6 @@ START:
       MOV AL, 00000011B
       OUT DX, AL
       
-      ;MOV DX, PORTB
-      ;IN AL, DX
-      ;CMP AL, 004H
-      ;JE _SNAKE
       JMP WAIT_INPUT
 
 CODE    ENDS
