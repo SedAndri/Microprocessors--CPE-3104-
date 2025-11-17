@@ -1,0 +1,863 @@
+;BORDARIO SID ANDRE P
+
+
+PROCED1 SEGMENT 'CODE'
+ON_OFF PROC FAR
+ASSUME CS:PROCED1, DS:DATA
+ORG 00000H
+   PUSHF
+   PUSH AX
+   PUSH DX
+   CMP ON_FLAG, 1
+   JE RESET_ON
+   MOV ON_FLAG, 1
+   MOV MODE_FLAG, 1
+   JMP EXIT_ON_OFF
+   RESET_ON:
+      MOV ON_FLAG, 0
+      MOV PAUSE_FLAG, 0
+   EXIT_ON_OFF:
+   POP DX
+   POP AX
+   POPF
+   IRET
+ON_OFF ENDP
+PROCED1 ENDS
+
+PROCED2 SEGMENT 'CODE'
+PAUSE_PLAY PROC FAR
+ASSUME CS:PROCED2, DS:DATA
+ORG 00050H
+   PUSHF
+   PUSH AX
+   PUSH DX
+   CMP ON_FLAG, 1
+   JNE EXIT_PAUSE_PLAY
+   CMP PAUSE_FLAG, 1
+   JE RESET_PAUSE
+   MOV PAUSE_FLAG, 1
+   JMP EXIT_PAUSE_PLAY
+   RESET_PAUSE:
+      MOV PAUSE_FLAG, 0
+   EXIT_PAUSE_PLAY:
+   POP DX
+   POP AX
+   POPF
+   IRET
+PAUSE_PLAY ENDP
+PROCED2 ENDS
+
+PROCED3 SEGMENT 'CODE'
+MODES PROC FAR
+ASSUME CS:PROCED3, DS:DATA
+ORG 00100H
+   PUSHF
+   PUSH AX
+   PUSH DX
+   CMP PAUSE_FLAG, 1
+   JNE EXIT_MODE
+   INC MODE_FLAG
+   MOV PAUSE_FLAG, 0
+   CMP MODE_FLAG, 4
+   JNE EXIT_MODE
+   MOV MODE_FLAG, 1
+   EXIT_MODE:
+   POP DX
+   POP AX
+   POPF
+   IRET
+MODES ENDP
+PROCED3 ENDS
+
+DATA SEGMENT
+ORG 00250H
+   PORTA EQU 0F0H	; 8255 PPI
+   PORTB EQU 0F2H
+   PORTC EQU 0F4H
+   COM_REG1 EQU 0F6H
+   PIC1 EQU 0E0H	; 8259 PIC
+   PIC2 EQU 0E2H
+   ICW1 EQU 013H
+   ICW2 EQU 080H
+   ICW4 EQU 003H
+   OCW1 EQU 0F8H	;1111 1000 = F8
+   ON_FLAG DB 0
+   PAUSE_FLAG DB 0
+   MODE_FLAG DB 1
+   TEMP DB ?
+DATA ENDS
+
+STK SEGMENT STACK
+   BOS DW 64d DUP (?)
+   TOS LABEL WORD
+STK ENDS
+
+CODE    SEGMENT PUBLIC 'CODE'
+        ASSUME CS:CODE, DS:DATA, SS:STK
+	ORG 00300H
+START:
+   MOV AX, DATA
+   MOV DS, AX		; set the Data Segment address
+   MOV AX, STK
+   MOV SS, AX		; set the Stack Segment address
+   LEA SP, TOS		; set SP as Top of Stack
+   CLI
+
+   MOV DX, COM_REG1	; Configuring 8255 PPI
+   MOV AL, 10001001B
+   OUT DX, AL
+
+   MOV AL, ICW1		; Configuring 8259
+   OUT PIC1, AL
+   MOV AL, ICW2
+   OUT PIC2, AL
+   MOV AL, ICW4
+   OUT PIC2, AL
+   MOV AL, OCW1
+   OUT PIC2, AL
+   STI
+
+   ; Storing interrupt vector to interrupt vector table in memory
+   MOV AX, OFFSET ON_OFF
+   MOV [ES:200H], AX
+   MOV AX, SEG ON_OFF
+   MOV [ES:202H], AX
+   MOV AX, OFFSET PAUSE_PLAY
+   MOV [ES:204H], AX
+   MOV AX, SEG PAUSE_PLAY
+   MOV [ES:206H], AX
+   MOV AX, OFFSET MODES
+   MOV [ES:208H], AX
+   MOV AX, SEG MODES
+   MOV [ES:20AH], AX
+
+   ; foreground routine
+   HERE:
+      MOV AL, 00000000B
+      OUT PORTA, AL
+      MOV AL, 00000000B
+      OUT PORTB, AL
+      CMP ON_FLAG, 0
+      JE HERE
+      CMP PAUSE_FLAG, 1
+      JE PAUSE
+      CMP MODE_FLAG, 1
+      JE DEFAULT
+      CMP MODE_FLAG, 2
+     ; JE STICKMAN
+      ;CMP MODE_FLAG, 3
+      ;JE LANTERN
+   JMP HERE
+
+   ; Mode 1
+   DEFAULT:
+      ; B
+      MOV SI, OFFSET GLYPH_S
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      
+      MOV SI, OFFSET GLYPH_S
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      
+      MOV SI, OFFSET GLYPH_S
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+
+      ; O
+      MOV SI, OFFSET GLYPH_SS
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      
+      MOV SI, OFFSET GLYPH_SS
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      
+      MOV SI, OFFSET GLYPH_SS
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      ; space
+
+      ; R
+      MOV SI, OFFSET GLYPH_SSS
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      
+      MOV SI, OFFSET GLYPH_SSS
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      
+      MOV SI, OFFSET GLYPH_SSS
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      ; space
+
+      ; D
+      MOV SI, OFFSET GLYPH_SSSS
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      
+      MOV SI, OFFSET GLYPH_SSSS
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      
+      MOV SI, OFFSET GLYPH_SSSS
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      ; space
+
+      ; A
+      MOV SI, OFFSET GLYPH_P
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      
+      MOV SI, OFFSET GLYPH_P
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      
+      MOV SI, OFFSET GLYPH_P
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      ; space
+
+      ; R
+      MOV SI, OFFSET GLYPH_PP
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      
+      MOV SI, OFFSET GLYPH_PP
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      
+      MOV SI, OFFSET GLYPH_PP
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      ; space
+   
+      ; I
+      ; B
+      MOV SI, OFFSET GLYPH_PPPP
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      
+      MOV SI, OFFSET GLYPH_PPPP
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      
+      MOV SI, OFFSET GLYPH_PPPP
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      ; space
+
+      ; O
+      MOV SI, OFFSET GLYPH_B
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      
+      MOV SI, OFFSET GLYPH_B
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      
+      MOV SI, OFFSET GLYPH_B
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      ; space
+
+      ; R
+      MOV SI, OFFSET GLYPH_BB
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      
+      MOV SI, OFFSET GLYPH_BB
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      
+      MOV SI, OFFSET GLYPH_BB
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      ; space
+
+      ; D
+      MOV SI, OFFSET GLYPH_BBB
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      
+      MOV SI, OFFSET GLYPH_BBB
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      
+      MOV SI, OFFSET GLYPH_BBB
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      ; space
+
+      ; A
+      MOV SI, OFFSET GLYPH_BBBB
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      
+      MOV SI, OFFSET GLYPH_BBBB
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      
+      MOV SI, OFFSET GLYPH_BBBB
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      
+
+      
+       ; B
+      MOV SI, OFFSET GLYPH_S
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      
+      MOV SI, OFFSET GLYPH_S
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      
+      MOV SI, OFFSET GLYPH_S
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      ; space
+
+      ; O
+      MOV SI, OFFSET GLYPH_SS
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      
+      MOV SI, OFFSET GLYPH_SS
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      
+      MOV SI, OFFSET GLYPH_SS
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      ; space
+      
+      ; R
+      MOV SI, OFFSET GLYPH_SSS
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      
+      MOV SI, OFFSET GLYPH_SSS
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      
+      MOV SI, OFFSET GLYPH_SSS
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      ; space
+  
+      ; D
+      MOV SI, OFFSET GLYPH_SSSS
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      
+      MOV SI, OFFSET GLYPH_SSSS
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      
+      MOV SI, OFFSET GLYPH_SSSS
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      ; space
+
+      ; A
+      MOV SI, OFFSET GLYPH_P
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      
+      MOV SI, OFFSET GLYPH_P
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      
+      MOV SI, OFFSET GLYPH_P
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      ; space
+      
+      ; R
+      MOV SI, OFFSET GLYPH_PP
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      
+      MOV SI, OFFSET GLYPH_PP
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      
+      MOV SI, OFFSET GLYPH_PP
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      ; space
+      
+      ; I
+      ; B
+      MOV SI, OFFSET GLYPH_PPP
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      
+      MOV SI, OFFSET GLYPH_PPP
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      
+      MOV SI, OFFSET GLYPH_PPP
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      ; space
+      
+      
+      MOV SI, OFFSET GLYPH_PPPP
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      
+      MOV SI, OFFSET GLYPH_PPPP
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      
+      MOV SI, OFFSET GLYPH_PPPP
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      ; O
+      MOV SI, OFFSET GLYPH_B
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      
+      MOV SI, OFFSET GLYPH_B
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      
+      MOV SI, OFFSET GLYPH_B
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      ; space
+      
+      ; R
+      MOV SI, OFFSET GLYPH_BB
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      
+      MOV SI, OFFSET GLYPH_BB
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      
+      MOV SI, OFFSET GLYPH_BB
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      ; space
+      
+      ; D
+      MOV SI, OFFSET GLYPH_BBB
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      
+      MOV SI, OFFSET GLYPH_BBB
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      
+      MOV SI, OFFSET GLYPH_BBB
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      ; space
+      ; A
+      MOV SI, OFFSET GLYPH_BBBB
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      
+      MOV SI, OFFSET GLYPH_BBBB
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      
+      MOV SI, OFFSET GLYPH_BBBB
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      
+      
+       ; B
+      MOV SI, OFFSET GLYPH_S
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      
+      MOV SI, OFFSET GLYPH_S
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      
+      MOV SI, OFFSET GLYPH_S
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      ; space
+      
+      ; O
+      MOV SI, OFFSET GLYPH_SS
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      
+      MOV SI, OFFSET GLYPH_SS
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      
+      MOV SI, OFFSET GLYPH_SS
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      ; space
+      
+      ; R
+      MOV SI, OFFSET GLYPH_SSS
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      
+      MOV SI, OFFSET GLYPH_SSS
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      
+      MOV SI, OFFSET GLYPH_SSS
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      ; space
+      
+      ; D
+      MOV SI, OFFSET GLYPH_SSSS
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      
+      MOV SI, OFFSET GLYPH_SSSS
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      
+      MOV SI, OFFSET GLYPH_SSSS
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      ; space
+      
+      ; A
+      MOV SI, OFFSET GLYPH_P
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      
+      MOV SI, OFFSET GLYPH_P
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      
+      MOV SI, OFFSET GLYPH_P
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      ; space
+      
+      ; R
+      MOV SI, OFFSET GLYPH_PP
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      
+      MOV SI, OFFSET GLYPH_PP
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      
+      MOV SI, OFFSET GLYPH_PP
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      ; space
+      
+      ; I
+      ; B
+      MOV SI, OFFSET GLYPH_PPPP
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      
+      MOV SI, OFFSET GLYPH_PPPP
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      
+      MOV SI, OFFSET GLYPH_PPPP
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      ; space
+      
+      ; O
+      MOV SI, OFFSET GLYPH_B
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      
+      MOV SI, OFFSET GLYPH_B
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      
+      MOV SI, OFFSET GLYPH_B
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      ; space
+      
+      ; R
+      MOV SI, OFFSET GLYPH_BB
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      
+      MOV SI, OFFSET GLYPH_BB
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      
+      MOV SI, OFFSET GLYPH_BB
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      ; space
+      
+      ; D
+      MOV SI, OFFSET GLYPH_BBB
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      
+      MOV SI, OFFSET GLYPH_BBB
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      
+      MOV SI, OFFSET GLYPH_BBB
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      ; space
+      
+      ; A
+      MOV SI, OFFSET GLYPH_BBBB
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      
+      MOV SI, OFFSET GLYPH_BBBB
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      
+      MOV SI, OFFSET GLYPH_BBBB
+      CALL PRINT_CHAR
+      CALL PRINT_CHAR
+      
+      
+      
+   JMP HERE
+
+   ; Mode 2
+   CON_SM:
+   JMP HERE
+   ; Print character from the specified font
+   PRINT_CHAR:
+      MOV AH, 11111110B
+      MOV DI, SI
+      MOV AL, MODE_FLAG
+      MOV TEMP, AL
+   F1:
+      CMP PAUSE_FLAG, 1
+      JE PAUSE
+      MOV AL, AH
+      OUT PORTB, AL
+      MOV AL, BYTE PTR CS:[SI]    ; Get row bits
+      CALL REV5                   ; FIX: reverse 5 LSBs (mirror correction)
+      OUT PORTA, AL
+      CMP ON_FLAG, 0
+      JE HERE
+      CALL DELAY_250MS
+      MOV AL, 00H
+      OUT PORTA, AL
+      INC SI
+      CLC
+      ROL AH, 1
+      CALL DELAY_500MS
+      JC F1
+   RET
+
+   PAUSE:
+      MOV SI, DI
+      MOV AH, 11111110B
+   F2:
+      CMP PAUSE_FLAG, 0
+      JE UNPAUSE
+      MOV AL, AH
+      OUT PORTB, AL
+      MOV AL, BYTE PTR CS:[SI]    ; Get row bits
+      CALL REV5                   ; FIX: mirror correction also during pause
+      OUT PORTA, AL
+      CMP ON_FLAG, 0
+      JE HERE
+      CALL DELAY_250MS
+      MOV AL, 00H
+      OUT PORTA, AL
+      INC SI
+      CLC
+      ROL AH, 1
+      JC F2
+      JMP HERE
+   UNPAUSE:
+      MOV AL, MODE_FLAG
+      CMP TEMP, AL
+      JNE CHECK_MODE
+      RET
+      CHECK_MODE:
+      CMP MODE_FLAG, 1
+      JE DEFAULT
+     ; CMP MODE_FLAG, 2
+      ;JE STICKMAN
+      ;CMP MODE_FLAG, 3
+      ;JE LANTERN
+
+   OFF:
+      MOV AL, 00000000B
+      OUT PORTA, AL
+      MOV AL, 11111111B
+      OUT PORTB, AL
+      MOV ON_FLAG, 0
+      MOV MODE_FLAG, 1
+   JMP HERE
+
+   DELAY_250MS:	MOV CX, 250
+   TIMER1:
+      NOP
+      NOP
+      NOP
+      NOP
+      LOOP TIMER1
+   RET
+
+   DELAY_500MS:	MOV CX, 00AFH	; not 500MS
+   L2:
+      NOP
+      NOP
+      LOOP L2
+   RET
+
+   DELAY_1MS: MOV BX, 001AH
+   L1:
+      DEC BX
+      NOP
+      JNZ L1
+      RET
+   RET
+
+; --- NEW: reverse 5 LSBs in AL (bit0..bit4) to fix left-right mirroring ---
+REV5 PROC NEAR
+   PUSH CX
+   PUSH DX
+  AND AL, 00011111B      ; keep 5 columns
+   XOR DL, DL
+   MOV CL, 5
+@@rev:
+   SHR AL, 1              ; take LSB into CF
+   RCL DL, 1              ; shift into DL
+   LOOP @@rev
+   MOV AL, DL
+   POP DX
+   POP CX
+   RET
+REV5 ENDP
+
+GLYPH_SPACE:
+      DB 00000000B
+      DB 00000000B
+      DB 00000000B
+      DB 00000000B
+      DB 00000000B
+      DB 00000000B
+      DB 00000000B
+
+GLYPH_S:
+      DB 00000011B
+      DB 00000010B
+      DB 00000010B
+      DB 00000011B
+      DB 00000000B
+      DB 00000000B
+      DB 00000011B
+
+GLYPH_SS:
+      DB 00000111B
+      DB 00000100B
+      DB 00000100B
+      DB 00000111B
+      DB 00000100B
+      DB 00000100B
+      DB 00000111B
+      
+     GLYPH_SSS:
+      DB 00001111B
+      DB 00001000B
+      DB 00001000B
+      DB 00001111B
+      DB 00001000B
+      DB 00001000B
+      DB 00001111B
+
+GLYPH_SSSS:
+      DB 00011111B
+      DB 00010000B
+      DB 00010000B
+      DB 00011111B
+      DB 00000001B
+      DB 00000001B
+      DB 00011111B
+
+GLYPH_P:
+      DB 00000011B
+      DB 00000010B
+      DB 00000010B
+      DB 00000011B
+      DB 00000010B
+      DB 00000010B
+      DB 00000010B
+      
+      GLYPH_PP:
+      DB 00000111B
+      DB 00000100B
+      DB 00000100B
+      DB 00000111B
+      DB 00000100B
+      DB 00000100B
+      DB 00000100B
+      
+      GLYPH_PPP:
+      DB 00001111B
+      DB 00001000B
+      DB 00001000B
+      DB 00001111B
+      DB 00001000B
+      DB 00001000B
+      DB 00001000B
+      
+      GLYPH_PPPP:
+      DB 00011111B
+      DB 00010001B
+      DB 00010001B
+      DB 00011111B
+      DB 00010000B
+      DB 00010000B
+      DB 00010000B
+
+GLYPH_B:
+      DB 00000011B
+      DB 00000010B
+      DB 00000010B
+      DB 00000011B
+      DB 00000010B
+      DB 00000010B
+      DB 00000011B
+      
+ GLYPH_BB:
+      DB 00000111B
+      DB 00000100B
+      DB 00000100B
+      DB 00000111B
+      DB 00000100B
+      DB 00000100B
+      DB 00000111B
+      
+GLYPH_BBB:
+      DB 00001111B
+      DB 00001000B
+      DB 00001000B
+      DB 00001111B
+      DB 00001000B
+      DB 00001000B
+      DB 00001111B
+      
+GLYPH_BBBB:
+      DB 00011111B
+      DB 00010001B
+      DB 00010001B
+      DB 00011111B
+      DB 00010001B
+      DB 00010001B
+      DB 00011111B
+CODE ENDS
+END START
