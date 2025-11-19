@@ -8,6 +8,7 @@ ORG 00000H
    PUSHF
    PUSH AX
    PUSH DX
+   PUSH DI           ; <--- add
    CMP ON_FLAG, 1
    JE RESET_ON
    MOV ON_FLAG, 1
@@ -17,6 +18,7 @@ ORG 00000H
       MOV ON_FLAG, 0
       MOV PAUSE_FLAG, 0
    EXIT_ON_OFF:
+   POP DI            ; <--- add
    POP DX
    POP AX
    POPF
@@ -31,6 +33,7 @@ ORG 00050H
    PUSHF
    PUSH AX
    PUSH DX
+   PUSH DI           ; <--- add
    CMP ON_FLAG, 1
    JNE CHECK_PASS          ; still allow pass trigger even if OFF? skip if off
    CMP PAUSE_FLAG, 1
@@ -51,6 +54,7 @@ CHECK_PASS:
    OUT PORTC, AL
    INT 80H                      ; invoke ON_OFF (vector stored at ES:200H)
 EXIT_PAUSE_PLAY:
+   POP DI            ; <--- add
    POP DX
    POP AX
    POPF
@@ -64,13 +68,44 @@ ASSUME CS:PROCED3, DS:DATA
 ORG 00100H
    PUSHF
    PUSH AX
-   ; Latch NMI state and stop normal flow
-   MOV NMI_ACTIVE, 1
-   MOV ON_FLAG, 0
+   PUSH DX
+   PUSH SI
+   PUSH DI
+
+   MOV ON_FLAG, 1
    MOV PAUSE_FLAG, 0
+   MOV MODE_FLAG, 2
+   MOV AL, 00000000B
+   OUT PORTC, AL             ; motor off
+
+   ; Optional single quick X paint (non-blocking)
+   MOV SI, OFFSET GLYPH_X_LOCAL
+   MOV CX, 8
+   MOV AH, 11111110B         ; one active-low row
+ROW_X_IMMEDIATE:
+   MOV AL, AH
+   OUT PORTB, AL
+   MOV AL, CS:[SI]
+   OUT PORTA, AL
+   INC SI
+   ROL AH,1                  ; shift zero to next row
+   LOOP ROW_X_IMMEDIATE
+
+   POP DI
+   POP SI
+   POP DX
    POP AX
    POPF
    IRET
+GLYPH_X_LOCAL:
+   DB 00010001B
+   DB 00001010B
+   DB 00000100B
+   DB 00001010B
+   DB 00010001B
+   DB 00010001B
+   DB 00000000B
+   DB 00000000B
 MODES ENDP
 PROCED3 ENDS
 
@@ -80,18 +115,17 @@ ORG 00250H
    PORTB EQU 0F2H
    PORTC EQU 0F4H
    COM_REG1 EQU 0F6H
-   PIC1 EQU 0E0H	; 8259 PIC
+   PIC1 EQU 0E0H	; 8259 PIC (master)
    PIC2 EQU 0E2H
    ICW1 EQU 013H
-   ICW2 EQU 080H
+   ICW2 EQU 080H      ; IR0 -> 80h, IR1 -> 81h, IR2 -> 82h, etc.
    ICW4 EQU 003H
-   OCW1 EQU 0F8H	;1111 1000 = F8
+   OCW1 EQU 0FCh      ; 1111 1100b : enable IR0 (NAME) and IR1 (OVERRIDE)
    ON_FLAG DB 0
    PAUSE_FLAG DB 0
    MODE_FLAG DB 1
    TEMP DB ?
-   PASS_DONE DB 0            ; set to 1 at end of one full S-P-B pass in DEFAULT
-   NMI_ACTIVE DB 0           ; latched by NMI to stop everything
+   PASS_DONE DB 0
 DATA ENDS
 
 STK SEGMENT STACK
@@ -103,18 +137,24 @@ CODE    SEGMENT PUBLIC 'CODE'
         ASSUME CS:CODE, DS:DATA, SS:STK
 	ORG 00300H
 START:
+   MOV AX, 0
+   MOV ES, AX              ; ensure IVT segment for INT 80h..82h writes
+   ; (place BEFORE storing vectors)
+
    MOV AX, DATA
-   MOV DS, AX		; set the Data Segment address
+   MOV DS, AX
    MOV AX, STK
-   MOV SS, AX		; set the Stack Segment address
-   LEA SP, TOS		; set SP as Top of Stack
+   MOV SS, AX
+   LEA SP, TOS
    CLI
 
-   MOV DX, COM_REG1	; Configuring 8255 PPI
-   MOV AL, 10000000B   ; 8255 mode set: PA=out, PB=out, PC upper=out, PC lower=out (Mode 0)
+   ; --- 8255: PA, PB, PC all outputs (matrix + motor on PC0) ---
+   MOV DX, COM_REG1
+   MOV AL, 10000000B
    OUT DX, AL
 
-   MOV AL, ICW1		; Configuring 8259
+   ; --- 8259 init: base vector 80h, enable IR0 & IR1 ---
+   MOV AL, ICW1
    OUT PIC1, AL
    MOV AL, ICW2
    OUT PIC2, AL
@@ -124,22 +164,21 @@ START:
    OUT PIC2, AL
    STI
 
-  ; Install ISRs in IVT (ensure ES = 0000)
-  XOR AX, AX
-  MOV ES, AX
+   ; --- software vector table for far calls via INT 80h/81h/82h ---
    MOV AX, OFFSET ON_OFF
    MOV [ES:200H], AX
    MOV AX, SEG ON_OFF
    MOV [ES:202H], AX
+
    MOV AX, OFFSET PAUSE_PLAY
    MOV [ES:204H], AX
    MOV AX, SEG PAUSE_PLAY
    MOV [ES:206H], AX
-   ; NMI vector (INT 02h) -> MODES
-   MOV AX, OFFSET MODES
-   MOV [ES:0008H], AX
+
+   MOV AX, OFFSET MODES        ; MODE / OVERRIDE handler
+   MOV [ES:208H], AX
    MOV AX, SEG MODES
-   MOV [ES:000AH], AX
+   MOV [ES:20AH], AX
 
    ; foreground routine
    HERE:
@@ -147,24 +186,22 @@ START:
       OUT PORTA, AL
       MOV AL, 00000000B
       OUT PORTB, AL
-      CMP NMI_ACTIVE, 1
-      JE NMI_HALT
+
+      ; OVERRIDE / STOP has highest priority
+    
+      CMP MODE_FLAG, 2
+      JE STOP
+
+      ; if system OFF and not in STOP mode, just idle
       CMP ON_FLAG, 0
       JE HERE
+
       CMP PAUSE_FLAG, 1
       JE PAUSE
       CMP MODE_FLAG, 1
       JE DEFAULT
-      CMP MODE_FLAG, 2
-     ; JE STOP
 
    JMP HERE
-   
-   ; NMI halt loop: continuously show X glyph
-   NMI_HALT:
-      MOV SI, OFFSET GLYPH_X
-      CALL PRINT_CHAR
-      JMP NMI_HALT
    
    DEFAULT:
       ; S (slow: each stage + hold)
@@ -244,35 +281,57 @@ START:
       
    JMP HERE
    
-   ; Mode 2
-   CON_SM:
+   ; Mode 2: emergency stop (override / NMI)
+   STOP:
+      ; Stop PORTC (motor off)
+      MOV AL, 00000000B
+      OUT PORTC, AL
+
+STOP_LOOP:
+      ; show GLYPH_X continuously
+      MOV SI, OFFSET GLYPH_X
+      CALL PRINT_CHAR
+
+      CMP MODE_FLAG, 2
+      JE STOP_LOOP          ; still in STOP mode -> keep showing X
+
+      ; LEFT STOP mode (typically after ON_OFF). Return to main loop.
+      JMP HERE
+   
    JMP HERE
+   
    ; Print character from the specified font
    PRINT_CHAR:
-      MOV DI, SI              ; start of glyph (8 bytes)
-      MOV BX, 0040H           ; refresh count (increase for brighter / more “solid”)
+   MOV DI, SI
+   MOV BX, 0040H
 REFRESH_LOOP:
-      MOV AH, 11111110B       ; row select (active low single 0 bit)
-      MOV SI, DI
+   CMP MODE_FLAG, 2
+   JE FORCE_STOP
+   MOV AH, 11111110B
+   MOV SI, DI
+   MOV CL, 8
 ROW_LOOP:
-      MOV AL, AH
-      OUT PORTB, AL           ; select row
-      MOV AL, BYTE PTR CS:[SI]
-      CALL REV5               ; fix mirror if needed
-      OUT PORTA, AL           ; output columns for this row
-      ; tiny hold (crude)
-      MOV DX, 0008H
+   MOV AL, AH
+   OUT PORTB, AL
+   MOV AL, BYTE PTR CS:[SI]
+   CALL REV5
+   OUT PORTA, AL
+   MOV DX, 0008H
 HOLD_LOOP:
-      NOP
-      DEC DX
-      JNZ HOLD_LOOP
-      INC SI
-      CLC
-      ROL AH, 1
-      JC ROW_LOOP             ; continue rows until carry cleared
-      DEC BX
-      JNZ REFRESH_LOOP        ; repeat whole glyph quickly
-      RET
+   NOP
+   DEC DX
+   JNZ HOLD_LOOP
+   INC SI
+   ROL AH,1
+   DEC CL
+   JNZ ROW_LOOP
+   DEC BX
+   JNZ REFRESH_LOOP
+   RET
+
+FORCE_STOP:
+      ; jump to STOP handler in the main segment
+      JMP STOP
 
    PAUSE:
       MOV SI, DI
@@ -303,8 +362,8 @@ HOLD_LOOP:
       CHECK_MODE:
       CMP MODE_FLAG, 1
       JE DEFAULT
-     ; CMP MODE_FLAG, 2
-      ;JE STICKMAN
+      CMP MODE_FLAG, 2
+      JE STOP
       ;CMP MODE_FLAG, 3
       ;JE LANTERN
 
@@ -519,14 +578,14 @@ GLYPH_B_SPACER:
       DB 00000000B   ; added
 
 GLYPH_X:
-      DB 00010001B   ; 1 0 0 0 1
-      DB 00001010B   ; 0 1 0 1 0
-      DB 00000100B   ; 0 0 1 0 0
-      DB 00001010B   ; 0 1 0 1 0
-      DB 00010001B   ; 1 0 0 0 1
+      DB 00010001B
+      DB 00001010B
+      DB 00000100B
+      DB 00001010B
+      DB 00010001B
+      DB 00010001B
       DB 00000000B
-      DB 00000000B
-      DB 00000000B
+      DB 00000000B   ; added
 
 GLYPH_S_HOLD1:
       DB 00000001B

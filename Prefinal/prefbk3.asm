@@ -1,14 +1,14 @@
 ;BORDARIO SID ANDRE P
 
 
-PROCED1 SEGMENT 'CODE'
+ISR1 SEGMENT 'CODE'
 ON_OFF PROC FAR
-ASSUME CS:PROCED1, DS:DATA
+ASSUME CS:ISR1, DS:DATA
 ORG 00000H
    PUSHF
    PUSH AX
    PUSH DX
-   PUSH DI           ; <--- add
+   PUSH DI          
    CMP ON_FLAG, 1
    JE RESET_ON
    MOV ON_FLAG, 1
@@ -18,17 +18,17 @@ ORG 00000H
       MOV ON_FLAG, 0
       MOV PAUSE_FLAG, 0
    EXIT_ON_OFF:
-   POP DI            ; <--- add
+   POP DI           
    POP DX
    POP AX
    POPF
    IRET
 ON_OFF ENDP
-PROCED1 ENDS
+ISR1 ENDS
 
-PROCED2 SEGMENT 'CODE'
+ISR2 SEGMENT 'CODE'
 PAUSE_PLAY PROC FAR
-ASSUME CS:PROCED2, DS:DATA
+ASSUME CS:ISR2, DS:DATA
 ORG 00050H
    PUSHF
    PUSH AX
@@ -36,16 +36,16 @@ ORG 00050H
    PUSH DI
    
    CMP ON_FLAG, 1
-   JNE EXIT_PAUSE_PLAY      ; Skip if system is OFF
+   JNE EXIT_PAUSE_PLAY    
    
-   ; Check if this is the first pass completion
+
    CMP PASS_DONE, 1
-   JNE TOGGLE_PAUSE         ; If not first pass, just toggle pause
+   JNE TOGGLE_PAUSE      
    
-   ; First pass completed - turn on motor (all PORTC bits HIGH)
+
    MOV AL, 11111111B
    OUT PORTC, AL
-   MOV PASS_DONE, 0         ; Reset flag
+   MOV PASS_DONE, 0      
    JMP EXIT_PAUSE_PLAY
    
 TOGGLE_PAUSE:
@@ -64,31 +64,31 @@ EXIT_PAUSE_PLAY:
    POPF
    IRET
 PAUSE_PLAY ENDP
-PROCED2 ENDS
+ISR2 ENDS
 
-PROCED3 SEGMENT 'CODE'
+ISR3 SEGMENT 'CODE'
 MODES PROC FAR
-ASSUME CS:PROCED3, DS:DATA
+ASSUME CS:ISR3, DS:DATA
 ORG 00100H
    PUSHF
    PUSH AX
    PUSH DX
 
-   MOV MODE_FLAG, 2          ; Emergency stop mode (persistent X)
+   MOV MODE_FLAG, 2         
    MOV PAUSE_FLAG, 0
    MOV AL, 00000000B
-   OUT PORTC, AL             ; motor off
+   OUT PORTC, AL           
 
    POP DX
    POP AX
    POPF
    IRET
 MODES ENDP
-PROCED3 ENDS
+ISR3 ENDS
 
 DATA SEGMENT
 ORG 00250H
-   PORTA EQU 0F0H	; 8255 PPI
+   PORTA EQU 0F0H	
    PORTB EQU 0F2H
    PORTC EQU 0F4H
    COM_REG1 EQU 0F6H
@@ -115,7 +115,7 @@ CODE    SEGMENT PUBLIC 'CODE'
     ORG 00300H
 START:
    MOV AX, 0
-   MOV ES, AX              ; ensure IVT segment for INT 80h..82h writes
+   MOV ES, AX           
 
    MOV AX, DATA
    MOV DS, AX
@@ -124,7 +124,7 @@ START:
    LEA SP, TOS
    CLI
 
-   ; --- Set up interrupt vectors for INT 80H, 81H, 82H ---
+
    MOV AX, OFFSET ON_OFF
    MOV ES:[80H*4], AX        ; INT 80H offset
    MOV AX, SEG ON_OFF
@@ -136,16 +136,16 @@ START:
    MOV ES:[81H*4+2], AX      ; INT 81H segment
 
    MOV AX, OFFSET MODES
-   MOV ES:[82H*4], AX        ; INT 82H offset (NMI-style emergency stop)
+   MOV ES:[82H*4], AX        ; INT 82H offset (NMI)
    MOV AX, SEG MODES
    MOV ES:[82H*4+2], AX      ; INT 82H segment
 
-   ; --- 8255: PA, PB, PC all outputs (matrix + motor on PC0) ---
+
    MOV DX, COM_REG1
    MOV AL, 10000000B
    OUT DX, AL
 
-   ; --- 8259 init: base vector 80h, enable IR0, IR1, IR2 ---
+
    MOV AL, ICW1
    OUT PIC1, AL
    MOV AL, ICW2
@@ -158,16 +158,16 @@ START:
 
 HERE:
    CMP MODE_FLAG, 2
-   JE STOP                  ; Show persistent X in emergency mode
+   JE STOP                
 
-   ; Clear display only when NOT showing X
+
    MOV AL, 00000000B
    OUT PORTA, AL
    MOV AL, 00000000B
    OUT PORTB, AL
 
    CMP ON_FLAG, 0
-   JE HERE                  ; system off → idle
+   JE HERE                
 
    CMP PAUSE_FLAG, 1
    JE PAUSE
@@ -178,11 +178,11 @@ HERE:
    JMP HERE
    
    DEFAULT:
-      ; S (slow: each stage + hold)
+
       MOV SI, OFFSET GLYPH_S      
       CALL PRINT_CHAR
-      CALL PRINT_CHAR              ; hold
-      MOV SI, OFFSET GLYPH_S_HOLD1 ; slight variation dwell
+      CALL PRINT_CHAR              
+      MOV SI, OFFSET GLYPH_S_HOLD1 
       CALL PRINT_CHAR
       MOV SI, OFFSET GLYPH_SS     
       CALL PRINT_CHAR
@@ -251,13 +251,13 @@ HERE:
       CALL PRINT_CHAR
       
       MOV PASS_DONE, 1
-      INT 81H                  ; Call PAUSE_PLAY after one full pass
+      INT 81H                  
       
    JMP HERE
    
-   ; Mode 2: emergency stop (override / NMI)
+   
    STOP:
-      ; Stop PORTC (motor off)
+     
       MOV AL, 00000000B
       OUT PORTC, AL
 
@@ -267,10 +267,13 @@ STOP_LOOP:
       JE STOP_LOOP
       JMP HERE
 
-; --- Dedicated X renderer for STOP mode ---
+
 SHOW_X:
-   MOV SI, OFFSET GLYPH_X
+   MOV DI, OFFSET GLYPH_X
+   MOV BX, 0040H           ; Match PRINT_CHAR refresh count
+REFRESH_X:
    MOV AH, 11111110B
+   MOV SI, DI
    MOV CX, 8
 @@rowX:
    MOV AL, AH
@@ -278,14 +281,27 @@ SHOW_X:
    MOV AL, BYTE PTR CS:[SI]
    CALL REV5
    OUT PORTA, AL
+   
+   ; Hold each row
+   PUSH DX
+   MOV DX, 0008H
+@@holdX:
+   NOP
+   DEC DX
+   JNZ @@holdX
+   POP DX
+   
    INC SI
    ROL AH,1
    LOOP @@rowX
+   
+   DEC BX
+   JNZ REFRESH_X
    RET
 
    JMP HERE
    
-   ; Print character from the specified font
+
    PRINT_CHAR:
    MOV DI, SI
    MOV BX, 0040H
@@ -313,7 +329,7 @@ HOLD_LOOP:
    RET
 
 FORCE_STOP:
-      ; jump to STOP handler in the main segment
+
       JMP STOP
 
    PAUSE:
@@ -324,8 +340,8 @@ FORCE_STOP:
       JE UNPAUSE
       MOV AL, AH
       OUT PORTB, AL
-      MOV AL, BYTE PTR CS:[SI]    ; Get row bits
-      CALL REV5                   ; FIX: mirror correction also during pause
+      MOV AL, BYTE PTR CS:[SI]    
+      CALL REV5                  
       OUT PORTA, AL
       CMP ON_FLAG, 0
       JE HERE
@@ -347,8 +363,6 @@ FORCE_STOP:
       JE DEFAULT
       CMP MODE_FLAG, 2
       JE STOP
-      ;CMP MODE_FLAG, 3
-      ;JE LANTERN
 
    OFF:
       MOV AL, 00000000B
@@ -359,7 +373,7 @@ FORCE_STOP:
       MOV MODE_FLAG, 1
    JMP HERE
 
-   DELAY_250MS:	MOV CX, 0AFFH
+   DELAY_250MS:	MOV CX, 0AFFH ;edit for faster or slower
    TIMER1:
       NOP
       NOP
@@ -368,7 +382,7 @@ FORCE_STOP:
       LOOP TIMER1
    RET
 
-   DELAY_500MS:	MOV CX, 03AAH	; not 500MS
+   DELAY_500MS:	MOV CX, 03AAH	
    L2:
       NOP
       NOP
@@ -383,16 +397,16 @@ FORCE_STOP:
       RET
    RET
 
-; --- NEW: reverse 5 LSBs in AL (bit0..bit4) to fix left-right mirroring ---
+
 REV5 PROC NEAR
    PUSH CX
    PUSH DX
-  AND AL, 00011111B      ; keep 5 columns
+  AND AL, 00011111B      
    XOR DL, DL
    MOV CL, 5
 @@rev:
-   SHR AL, 1              ; take LSB into CF
-   RCL DL, 1              ; shift into DL
+   SHR AL, 1             
+   RCL DL, 1              
    LOOP @@rev
    MOV AL, DL
    POP DX
@@ -408,7 +422,7 @@ GLYPH_SPACE:
       DB 00000000B
       DB 00000000B
       DB 00000000B
-      DB 00000000B   ; added
+      DB 00000000B   
 
 GLYPH_S:
       DB 00000001B
@@ -418,7 +432,7 @@ GLYPH_S:
       DB 00000001B
       DB 00000001B
       DB 00000001B
-      DB 00000000B   ; added
+      DB 00000000B   
 
 GLYPH_SS:
       DB 00000011B
@@ -428,7 +442,7 @@ GLYPH_SS:
       DB 00000001B
       DB 00000001B
       DB 00000011B
-      DB 00000000B   ; added
+      DB 00000000B   
 
 GLYPH_SSS:
       DB 00000111B
@@ -438,7 +452,7 @@ GLYPH_SSS:
       DB 00000001B
       DB 00000001B
       DB 00000111B
-      DB 00000000B   ; added
+      DB 00000000B   
 
 GLYPH_SSSS:
       DB 00011110B
@@ -448,7 +462,7 @@ GLYPH_SSSS:
       DB 00000010B
       DB 00000010B
       DB 00011110B
-      DB 00000000B   ; added
+      DB 00000000B  
 
 GLYPH_S_SPACER:
       DB 00000000B
@@ -458,7 +472,7 @@ GLYPH_S_SPACER:
       DB 00000000B
       DB 00000000B
       DB 00000000B
-      DB 00000000B   ; added
+      DB 00000000B  
 
 GLYPH_P:
       DB 00000001B
@@ -468,7 +482,7 @@ GLYPH_P:
       DB 00000001B
       DB 00000001B
       DB 00000001B
-      DB 00000000B   ; added
+      DB 00000000B 
 
 GLYPH_PP:
       DB 00000011B
@@ -478,7 +492,7 @@ GLYPH_PP:
       DB 00000010B
       DB 00000010B
       DB 00000010B
-      DB 00000000B   ; added
+      DB 00000000B   
 
 GLYPH_PPP:
       DB 00000111B
@@ -488,7 +502,7 @@ GLYPH_PPP:
       DB 00000100B
       DB 00000100B
       DB 00000100B
-      DB 00000000B   ; added
+      DB 00000000B  
 
 GLYPH_PPPP:
       DB 00011110B
@@ -498,7 +512,7 @@ GLYPH_PPPP:
       DB 00010000B
       DB 00010000B
       DB 00010000B
-      DB 00000000B   ; added
+      DB 00000000B  
 
 GLYPH_P_SPACER:
       DB 00000000B
@@ -508,7 +522,7 @@ GLYPH_P_SPACER:
       DB 00000000B
       DB 00000000B
       DB 00000000B
-      DB 00000000B   ; added
+      DB 00000000B  
 
 GLYPH_B:
       DB 00000001B
@@ -518,7 +532,7 @@ GLYPH_B:
       DB 00000001B
       DB 00000001B
       DB 00000001B
-      DB 00000000B   ; added
+      DB 00000000B 
 
 GLYPH_BB:
       DB 00000011B
@@ -528,7 +542,7 @@ GLYPH_BB:
       DB 00000010B
       DB 00000010B
       DB 00000011B
-      DB 00000000B   ; added
+      DB 00000000B 
 
 GLYPH_BBB:
       DB 00000111B
@@ -538,7 +552,7 @@ GLYPH_BBB:
       DB 00000101B
       DB 00000101B
       DB 00000111B
-      DB 00000000B   ; added
+      DB 00000000B  
 
 GLYPH_BBBB:
       DB 00011110B
@@ -548,7 +562,7 @@ GLYPH_BBBB:
       DB 00010010B
       DB 00010010B
       DB 00011110B
-      DB 00000000B   ; added
+      DB 00000000B 
 
 GLYPH_B_SPACER:
       DB 00000000B
@@ -558,7 +572,7 @@ GLYPH_B_SPACER:
       DB 00000000B
       DB 00000000B
       DB 00000000B
-      DB 00000000B   ; added
+      DB 00000000B 
 
 GLYPH_X:
       DB 00010001B
@@ -568,7 +582,7 @@ GLYPH_X:
       DB 00010001B
       DB 00010001B
       DB 00000000B
-      DB 00000000B   ; added
+      DB 00000000B  
 
 GLYPH_S_HOLD1:
       DB 00000001B
@@ -578,7 +592,7 @@ GLYPH_S_HOLD1:
       DB 00000001B
       DB 00000001B
       DB 00000001B
-      DB 00000000B   ; added
+      DB 00000000B 
 
 GLYPH_SS_HOLD1:
       DB 00000011B
@@ -588,7 +602,7 @@ GLYPH_SS_HOLD1:
       DB 00000001B
       DB 00000001B
       DB 00000011B
-      DB 00000000B   ; added
+      DB 00000000B  
 
 GLYPH_SSS_HOLD1:
       DB 00000111B
@@ -598,7 +612,7 @@ GLYPH_SSS_HOLD1:
       DB 00000001B
       DB 00000001B
       DB 00000111B
-      DB 00000000B   ; added
+      DB 00000000B  
 
 GLYPH_SSSS_HOLD:
       DB 00011110B
@@ -608,7 +622,7 @@ GLYPH_SSSS_HOLD:
       DB 00000010B
       DB 00000010B
       DB 00011110B
-      DB 00000000B   ; added
+      DB 00000000B 
 
 GLYPH_P_HOLD1:
       DB 00000001B
@@ -618,7 +632,7 @@ GLYPH_P_HOLD1:
       DB 00000001B
       DB 00000001B
       DB 00000001B
-      DB 00000000B   ; added
+      DB 00000000B 
 
 GLYPH_PP_HOLD1:
       DB 00000011B
@@ -628,7 +642,7 @@ GLYPH_PP_HOLD1:
       DB 00000010B
       DB 00000010B
       DB 00000010B
-      DB 00000000B   ; added
+      DB 00000000B  
 
 GLYPH_PPP_HOLD1:
       DB 00000111B
@@ -638,7 +652,7 @@ GLYPH_PPP_HOLD1:
       DB 00000100B
       DB 00000100B
       DB 00000100B
-      DB 00000000B   ; added
+      DB 00000000B  
 
 GLYPH_PPPP_HOLD:
       DB 00011110B
@@ -648,7 +662,7 @@ GLYPH_PPPP_HOLD:
       DB 00010000B
       DB 00010000B
       DB 00010000B
-      DB 00000000B   ; added
+      DB 00000000B  
 
 GLYPH_B_HOLD1:
       DB 00000001B
@@ -658,7 +672,7 @@ GLYPH_B_HOLD1:
       DB 00000001B
       DB 00000001B
       DB 00000001B
-      DB 00000000B   ; added
+      DB 00000000B  
 
 GLYPH_BB_HOLD1:
       DB 00000011B
@@ -668,7 +682,7 @@ GLYPH_BB_HOLD1:
       DB 00000010B
       DB 00000010B
       DB 00000011B
-      DB 00000000B   ; added
+      DB 00000000B  
 
 GLYPH_BBB_HOLD1:
       DB 00000111B
@@ -678,7 +692,7 @@ GLYPH_BBB_HOLD1:
       DB 00000101B
       DB 00000101B
       DB 00000111B
-      DB 00000000B   ; added
+      DB 00000000B  
 
 GLYPH_BBBB_HOLD:
       DB 00011110B
@@ -688,7 +702,7 @@ GLYPH_BBBB_HOLD:
       DB 00010010B
       DB 00010010B
       DB 00011110B
-      DB 00000000B   ; added
+      DB 00000000B  
 
 CODE ENDS
 END START
